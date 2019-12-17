@@ -14,8 +14,10 @@ from dbt.contracts.rpc import (
     RPCSnapshotParameters,
 )
 from dbt.rpc.method import (
-    Parameters,
+    Parameters, RemoteManifestMethod
 )
+
+from dbt.task.base import BaseTask
 from dbt.task.compile import CompileTask
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
@@ -31,6 +33,7 @@ from .cli import HasCLI
 class RPCCommandTask(
     RPCTask[Parameters],
     HasCLI[Parameters, RemoteExecutionResult],
+    BaseTask,
 ):
     @staticmethod
     def _listify(
@@ -113,11 +116,21 @@ class RemoteDocsGenerateProjectTask(
 
 
 class RemoteRunOperationTask(
-    RPCTask[RPCRunOperationParameters],
-    HasCLI[RPCRunOperationParameters, RemoteRunOperationResult],
     RunOperationTask,
+    RemoteManifestMethod[RPCRunOperationParameters, RemoteRunOperationResult],
+    HasCLI[RPCRunOperationParameters, RemoteRunOperationResult],
 ):
     METHOD_NAME = 'run-operation'
+
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        RemoteManifestMethod.__init__(
+            self, args, config, manifest  # type: ignore
+        )
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
 
     def set_args(self, params: RPCRunOperationParameters) -> None:
         self.args.macro = params.macro
@@ -133,8 +146,14 @@ class RemoteRunOperationTask(
         return RunOperationTask._runtime_initialize(self)
 
     def handle_request(self) -> RemoteRunOperationResult:
-        success, _ = RunOperationTask.run(self)
-        result = RemoteRunOperationResult(logs=[], success=success)
+        base = RunOperationTask.run(self)
+        result = RemoteRunOperationResult(
+            results=base.results,
+            generated_at=base.generated_at,
+            logs=[],
+            success=base.success,
+            elapsed_time=base.elapsed_time
+        )
         return result
 
     def interpret_results(self, results):

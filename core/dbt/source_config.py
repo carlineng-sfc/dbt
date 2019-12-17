@@ -1,3 +1,5 @@
+from typing import Dict, Any
+
 import dbt.exceptions
 
 from dbt.utils import deep_merge
@@ -45,10 +47,10 @@ class SourceConfig:
         self.AdapterSpecificConfigs = adapter_class.AdapterSpecificConfigs
 
         # the config options defined within the model
-        self.in_model_config = {}
+        self.in_model_config: Dict[str, Any] = {}
 
     def _merge(self, *configs):
-        merged_config = {}
+        merged_config: Dict[str, Any] = {}
         for config in configs:
             intermediary_merged = deep_merge(
                 merged_config.copy(), config.copy()
@@ -136,7 +138,7 @@ class SourceConfig:
     def smart_update(self, mutable_config, new_configs):
         config_keys = self.ConfigKeys | self.AdapterSpecificConfigs
 
-        relevant_configs = {
+        relevant_configs: Dict[str, Any] = {
             key: new_configs[key] for key
             in new_configs if key in config_keys
         }
@@ -165,7 +167,7 @@ class SourceConfig:
     def get_project_config(self, runtime_config):
         # most configs are overwritten by a more specific config, but pre/post
         # hooks are appended!
-        config = {}
+        config: Dict[str, Any] = {}
         for k in self.AppendListFields:
             config[k] = []
         for k in self.ExtendDictFields:

@@ -3,14 +3,18 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Union, Mapping, Any
+from typing import (
+    Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple
+)
 from uuid import UUID
 
 from hologram import JsonSchemaMixin
 
-from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
-    ParsedDocumentation
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.parsed import (
+    ParsedNode, ParsedMacro, ParsedDocumentation, ParsedNodePatch,
+    ParsedModelNode
+)
+from dbt.contracts.graph.compiled import CompileResultNode, CompiledModelNode
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, InternalException, raise_compiler_error
@@ -198,9 +202,9 @@ def build_edges(nodes):
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
     """
-    backward_edges = {}
+    backward_edges: Dict[str, List[str]] = {}
     # pre-populate the forward edge dict for simplicity
-    forward_edges = {node.unique_id: [] for node in nodes}
+    forward_edges: Dict[str, List[str]] = {n.unique_id: [] for n in nodes}
     for node in nodes:
         backward_edges[node.unique_id] = node.depends_on_nodes[:]
         for unique_id in node.depends_on_nodes:
@@ -260,17 +264,21 @@ class MaterializationCandidate:
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
     """
-    nodes: Mapping[str, CompileResultNode]
-    macros: Mapping[str, ParsedMacro]
-    docs: Mapping[str, ParsedDocumentation]
+    nodes: MutableMapping[str, CompileResultNode]
+    macros: MutableMapping[str, ParsedMacro]
+    docs: MutableMapping[str, ParsedDocumentation]
     generated_at: datetime
     disabled: List[ParsedNode]
-    files: Mapping[str, SourceFile]
+    files: MutableMapping[str, SourceFile]
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_macros(cls, macros=None, files=None) -> 'Manifest':
+    def from_macros(
+        cls,
+        macros: Optional[MutableMapping[str, ParsedMacro]] = None,
+        files: Optional[MutableMapping[str, SourceFile]] = None,
+    ) -> 'Manifest':
         if macros is None:
             macros = {}
         if files is None:
@@ -320,6 +328,10 @@ class Manifest:
         None, all pacakges will be searched.
         nodetype should be a list of NodeTypes to accept.
         """
+        search: Union[
+            MutableMapping[str, ParsedMacro],
+            MutableMapping[str, CompileResultNode],
+        ]
         if subgraph == 'nodes':
             search = self.nodes
         elif subgraph == 'macros':
@@ -409,8 +421,8 @@ class Manifest:
         candidates.sort()
         return candidates[-1].macro
 
-    def get_resource_fqns(self):
-        resource_fqns = {}
+    def get_resource_fqns(self) -> Dict[str, Set[Tuple[str, ...]]]:
+        resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
         for unique_id, node in self.nodes.items():
             if node.resource_type == NodeType.Source:
                 continue  # sources have no FQNs and can't be configured
@@ -428,7 +440,7 @@ class Manifest:
                 raise_duplicate_resource_name(node, self.nodes[unique_id])
             self.nodes[unique_id] = node
 
-    def patch_nodes(self, patches):
+    def patch_nodes(self, patches: MutableMapping[str, ParsedNodePatch]):
         """Patch nodes with the given dict of patches. Note that this consumes
         the input!
         This relies on the fact that all nodes have unique _name_ fields, not
@@ -444,6 +456,8 @@ class Manifest:
             patch = patches.pop(node.name, None)
             if not patch:
                 continue
+            # we know this because of the resource_type check above.
+            assert isinstance(node, (CompiledModelNode, ParsedModelNode))
             node.patch(patch)
 
         # log debug-level warning about nodes we couldn't find

@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Any
 
 from hologram import ValidationError
 
@@ -59,7 +60,7 @@ def read_profile(profiles_dir):
 
 def read_user_config(directory):
     try:
-        user_cfg = None
+        user_cfg: Dict[str, Any] = {}
         profile = read_profile(directory)
         if profile:
             user_cfg = profile.get('config', {})

@@ -1,6 +1,9 @@
 from copy import deepcopy
 import hashlib
 import os
+from typing import (
+    Callable, Dict, Tuple, Any
+)
 
 from dbt.clients.system import resolve_path_from_base
 from dbt.clients.system import path_exists
@@ -177,11 +180,11 @@ class Project:
         self.query_comment = query_comment
 
     @staticmethod
-    def _preprocess(project_dict):
+    def _preprocess(project_dict: Dict[str, Any]):
         """Pre-process certain special keys to convert them from None values
         into empty containers, and to turn strings into arrays of strings.
         """
-        handlers = {
+        handlers: Dict[Tuple[str, ...], Callable[[Any], Any]] = {
             ('on-run-start',): _list_if_none_or_string,
             ('on-run-end',): _list_if_none_or_string,
         }
@@ -193,7 +196,7 @@ class Project:
             handlers[(k, 'post-hook')] = _list_if_none_or_string
         handlers[('seeds', 'column_types')] = _dict_if_none
 
-        def converter(value, keypath):
+        def converter(value: Any, keypath: Tuple[str, ...]) -> Any:
             if keypath in handlers:
                 handler = handlers[keypath]
                 return handler(value)
