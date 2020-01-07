@@ -491,6 +491,10 @@ class ParsedDocumentation(UnparsedDocumentationFile, HasUniqueID):
     name: str
     block_contents: str
 
+    @property
+    def search_name(self):
+        return self.name
+
 
 @dataclass
 class ParsedSourceDefinition(
@@ -537,6 +541,10 @@ class ParsedSourceDefinition(
     @property
     def has_freshness(self):
         return bool(self.freshness) and self.loaded_at_field is not None
+
+    @property
+    def search_name(self):
+        return f'{self.source_name}.{self.name}'
 
 
 ParsedResource = Union[
